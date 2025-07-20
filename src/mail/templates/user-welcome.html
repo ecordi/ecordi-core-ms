@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Bienvenido a la plataforma</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f9fc;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 30px auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .header {
+      background-color: #4a90e2;
+      color: #ffffff;
+      padding: 20px;
+      text-align: center;
+    }
+    .content {
+      padding: 30px;
+    }
+    .content h2 {
+      color: #4a90e2;
+    }
+    .footer {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      padding: 20px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #4a90e2;
+      color: #ffffff;
+      padding: 12px 24px;
+      margin-top: 20px;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+    .credentials {
+      background-color: #f5f5f5;
+      border-left: 4px solid #4a90e2;
+      padding: 15px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>¡Bienvenido a nuestra plataforma!</h1>
+    </div>
+    <div class="content">
+      <h2>Tu cuenta fue creada correctamente 🎉</h2>
+      <p>Hola <strong>{{userName}}</strong>,</p>
+      <p>Te damos la bienvenida a <strong>{{companyName}}</strong>. Tu cuenta ha sido creada exitosamente.</p>
+      
+      <div class="credentials">
+        <p><strong>Tus credenciales de acceso:</strong></p>
+        <p>Email: {{email}}</p>
+        <p>Contraseña temporal: {{temporaryPassword}}</p>
+      </div>
+      
+      <p>Por seguridad te pedimos que <strong>cambies tu contraseña antes del <u>{{passwordExpirationDate}}</u></strong>.</p>
+      <p>Podés hacerlo ingresando a tu cuenta desde el siguiente enlace:</p>
+      <a class="button" href="{{loginUrl}}">Iniciar sesión</a>
+      <p>Si no esperabas esta invitación, por favor ignora este mensaje.</p>
+    </div>
+    <div class="footer">
+      &copy; {{year}} Plataforma Ecordi. Todos los derechos reservados.
+    </div>
+  </div>
+</body>
+</html>

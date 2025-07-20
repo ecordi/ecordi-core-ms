@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  core-ms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: core-ms
+    restart: always
+    ports:
+      - "3001:8088"
+    environment:
+      - NODE_ENV=develop
+      - MONGODB_URI=mongodb+srv://cordi96:k0Fxq5H4tdkzgz6n@ecordi.7an1z0b.mongodb.net/core-ms
+      - NATS_SERVERS=nats://nats:4222
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your_jwt_secret_here
+      - PORT=8088
+    depends_on:
+      - mongodb
+      - nats
+      - redis
+    networks:
+      - ecordi-network
+
+  mongodb:
+    image: mongo:6
+    container_name: core-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ecordi-network
+
+  nats:
+    image: nats:2.9-alpine
+    container_name: core-nats
+    restart: always
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - ecordi-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: core-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecordi-network
+
+networks:
+  ecordi-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
