@@ -30,25 +30,22 @@ FROM node:21-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache bash
-
 COPY package*.json ./
+
 RUN npm install
+RUN npm install @nestjs/passport passport passport-jwt @nestjs/axios --save
 
 COPY . .
 
-# Crear directorios para los templates de correo
+# Asegurarse de que existan los directorios para las plantillas
 RUN mkdir -p /app/dist/mail/templates
 RUN mkdir -p /app/dist/src/mail/templates
 
-# Copiar los templates de correo electrónico
+# Copiar las plantillas HTML
 COPY src/mail/templates/*.html /app/dist/mail/templates/
 COPY src/mail/templates/*.html /app/dist/src/mail/templates/
 
-# OPCIÓN 1: si usás Nest CLI localmente
-# RUN npx nest build
-
-# OPCIÓN 2: si usás ts-node-dev
+# Usar modo desarrollo para depurar más fácilmente
 CMD ["npm", "run", "start:dev"]
 
-EXPOSE 3002
+EXPOSE 3001

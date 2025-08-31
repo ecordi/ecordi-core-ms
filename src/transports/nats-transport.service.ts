@@ -1,15 +1,17 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom, timeout } from 'rxjs';
+import { NatsConnectionResponse, NatsMessageResponse, NatsBaseResponse } from './types/nats-responses.interface';
 
 @Injectable()
 export class NatsTransportService {
   private readonly logger = new Logger('NatsTransportService');
-  private readonly requestTimeout = 10000; // 10 segundos de timeout
+  private readonly requestTimeout = 30000; // 30 segundos de timeout para operaciones complejas
 
   constructor(
     @Inject('NATS_CLIENT') private readonly natsClient: ClientProxy,
     @Inject('AUTH_CLIENT') private readonly authClient: ClientProxy,
+    @Inject('WHATSAPP_CLIENT') private readonly whatsappClient: ClientProxy,
   ) {}
 
   /**
@@ -18,10 +20,13 @@ export class NatsTransportService {
    * @param data Datos a enviar
    * @returns Respuesta del mensaje
    */
-  async send<T>(pattern: string, data: any): Promise<T> {
+  async send<T = NatsBaseResponse>(pattern: string, data: any): Promise<T> {
     try {
+      // Use WhatsApp client for WhatsApp-related messages
+      const client = pattern.includes('whatsapp') ? this.whatsappClient : this.natsClient;
+      
       return await firstValueFrom(
-        this.natsClient.send<T>(pattern, data).pipe(
+        client.send<T>(pattern, data).pipe(
           timeout(this.requestTimeout),
         ),
       );
@@ -29,6 +34,20 @@ export class NatsTransportService {
       this.logger.error(`Error sending message to ${pattern}`, error);
       throw error;
     }
+  }
+
+  /**
+   * Envía mensaje de registro de conexión WhatsApp
+   */
+  async sendConnectionRegister(data: any): Promise<NatsConnectionResponse> {
+    return this.send<NatsConnectionResponse>('register_whatsapp_connection', data);
+  }
+
+  /**
+   * Envía mensaje para envío de WhatsApp
+   */
+  async sendWhatsAppMessage(data: any): Promise<NatsMessageResponse> {
+    return this.send<NatsMessageResponse>('whatsapp.send', data);
   }
 
   /**
