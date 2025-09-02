@@ -106,4 +106,8 @@ export class MessagingService {
       throw error;
     }
   }
+
+  async publishMessage(subject: string, payload: any): Promise<void> {
+    return this.natsTransportService.publish(subject, payload);
+  }
 }

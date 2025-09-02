@@ -5,7 +5,7 @@ import { ConnectionsService } from '../connections/connections.service';
 import { EventsService } from '../events/events.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Message, MessageDocument } from '../messaging/message.schema';
+import { Message, MessageDocument } from '../messaging/schemas/message.schema';
 import { MediaQueueService } from '../workers/workers.queue';
 import type { MediaDownloadJob } from '../workers/workers.queue';
 

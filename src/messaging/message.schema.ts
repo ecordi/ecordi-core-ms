@@ -57,6 +57,20 @@ export class Message {
     publicId?: string;
   };
 
+  @Prop({
+    type: [Object],
+    default: [],
+  })
+  kbFiles!: Array<{
+    fileId: string;
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    caption?: string;
+    sha256?: string;
+  }>;
+
   @Prop({ type: Object, default: {} })
   metadata!: any;
 }

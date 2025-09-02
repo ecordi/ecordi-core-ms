@@ -17,6 +17,10 @@ import { EventsModule } from './events/events.module';
 import { WorkersModule } from './workers/workers.module';
 import { OauthModule } from './oauth/oauth.module';
 import { ChannelsModule } from './channels/channels.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { TasksModule } from './tasks/tasks.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -53,6 +57,10 @@ import { ChannelsModule } from './channels/channels.module';
     WorkersModule,
     OauthModule,
     ChannelsModule,
+    TasksModule,
+    MessagingModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
