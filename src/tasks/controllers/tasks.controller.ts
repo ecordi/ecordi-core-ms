@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/
 import { TasksService } from '../services/tasks.service';
 
 @ApiTags('Tasks')
-@Controller('api/v1/core/tasks')
+@Controller('core/tasks')
 export class TasksController {
   private readonly logger = new Logger(TasksController.name);
 

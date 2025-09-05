@@ -22,9 +22,30 @@ export class MediaWorker {
     private readonly events: EventsService,
     @InjectModel(Message.name) private readonly msgModel: Model<MessageDocument>,
   ) {
-    const redisUrl =
-      this.config.get<string>('REDIS_URL') || `redis://${this.config.get<string>('REDIS_HOST') || 'redis'}:${this.config.get<string>('REDIS_PORT') || '6379'}`;
-    this.connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+    const envUrl = this.config.get<string>('REDIS_URL');
+    const host = this.config.get<string>('REDIS_HOST') || 'redis';
+    const port = this.config.get<string>('REDIS_PORT') || '6379';
+    const username = this.config.get<string>('REDIS_USER');
+    const password = this.config.get<string>('REDIS_PASSWORD');
+    const enableTlsFlag = this.config.get<string>('REDIS_TLS') === 'true';
+
+    if (envUrl) {
+      const isSecure = envUrl.startsWith('rediss://');
+      const servername = isSecure ? new URL(envUrl).hostname : undefined;
+      this.connection = new IORedis(envUrl, {
+        maxRetriesPerRequest: null,
+        ...(isSecure ? { tls: { servername } } : {}),
+      } as any);
+    } else {
+      this.connection = new IORedis({
+        host,
+        port: Number(port),
+        username,
+        password,
+        maxRetriesPerRequest: null,
+        ...(enableTlsFlag ? { tls: { servername: host } } : {}),
+      } as any);
+    }
 
     this.worker = new Worker<MediaDownloadJob>(
       'whatsapp-media-download',

@@ -18,9 +18,31 @@ export class MediaQueueService implements OnModuleDestroy {
   private readonly queue: Queue<MediaDownloadJob>;
 
   constructor(private readonly config: ConfigService) {
-    const redisUrl =
-      this.config.get<string>('REDIS_URL') || `redis://${this.config.get<string>('REDIS_HOST') || 'redis'}:${this.config.get<string>('REDIS_PORT') || '6379'}`;
-    const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+    const envUrl = this.config.get<string>('REDIS_URL');
+    const host = this.config.get<string>('REDIS_HOST') || 'redis';
+    const port = this.config.get<string>('REDIS_PORT') || '6379';
+    const username = this.config.get<string>('REDIS_USER');
+    const password = this.config.get<string>('REDIS_PASSWORD');
+    const enableTlsFlag = this.config.get<string>('REDIS_TLS') === 'true';
+
+    let connection: IORedis;
+    if (envUrl) {
+      const isSecure = envUrl.startsWith('rediss://');
+      const servername = isSecure ? new URL(envUrl).hostname : undefined;
+      connection = new IORedis(envUrl, {
+        maxRetriesPerRequest: null,
+        ...(isSecure ? { tls: { servername } } : {}),
+      } as any);
+    } else {
+      connection = new IORedis({
+        host,
+        port: Number(port),
+        username,
+        password,
+        maxRetriesPerRequest: null,
+        ...(enableTlsFlag ? { tls: { servername: host } } : {}),
+      } as any);
+    }
     this.queue = new Queue<MediaDownloadJob>('whatsapp-media-download', {
       connection,
       defaultJobOptions: {
