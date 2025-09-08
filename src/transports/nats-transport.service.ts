@@ -43,6 +43,31 @@ export class NatsTransportService {
     return this.send<T>('whatsapp.connection.register', payload);
   }
 
+  // Facebook: Send Messenger messages
+  async sendFacebookMessage<T = any>(payload: any): Promise<T> {
+    return this.send<T>('send_facebook_message', payload);
+  }
+
+  // Facebook: Register connection (exchange tokens and subscribe app)
+  async registerFacebookConnection<T = any>(payload: any): Promise<T> {
+    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ payload:", payload
+
+    )
+    const result = await this.send<T>('facebook.connection.register', payload);
+    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ result:", result)
+    return result;
+  }
+
+  // Facebook: Publish/Update/Delete feed post
+  async publishFacebookFeed<T = any>(payload: any): Promise<T> {
+    return this.send<T>('facebook.feed.publish', payload);
+  }
+
+  // Facebook: Publish/Update/Delete comment
+  async publishFacebookComment<T = any>(payload: any): Promise<T> {
+    return this.send<T>('facebook.comment.publish', payload);
+  }
+
   private getClientForSubject(subject: string): ClientProxy {
     if (subject.startsWith('send_whatsapp_message') || subject.startsWith('whatsapp.')) {
       return this.whatsappClient;

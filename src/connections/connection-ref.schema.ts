@@ -33,6 +33,14 @@ export class Connection {
 
   @Prop({ index: true })
   phoneNumberId?: string;
+
+  // Reference to provider-specific connection identifier (e.g., Instagram business account id)
+  @Prop({ index: true })
+  connectionRefId?: string;
+
+  // Optional page id (for Facebook/Instagram)
+  @Prop({ index: true })
+  pageId?: string;
 }
 
 export const ConnectionSchema = SchemaFactory.createForClass(Connection);

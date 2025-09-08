@@ -32,6 +32,46 @@ export class ChannelEventsConsumer implements OnModuleInit {
     }, 5000);
   }
 
+  async handleFacebookEventSimple(msg: Msg) {
+    try {
+      const rawData = new TextDecoder().decode(msg.data);
+      this.logger.debug(`Raw Facebook NATS data: ${rawData}`);
+
+      const eventData: any = JSON.parse(rawData);
+      if (!eventData) {
+        this.logger.error('❌ No event data in Facebook NATS message');
+        return;
+      }
+
+      // Map Facebook webhook event -> ChannelEventDto
+      const eventDto: ChannelEventDto & { channelType?: string } = {
+        channel: 'facebook',
+        channelType: 'facebook',
+        direction: 'incoming',
+        companyId: process.env.DEFAULT_COMPANY_ID || 'default-company',
+        connectionId: eventData.recipientId, // page id
+        senderId: eventData.senderId,
+        recipientId: eventData.recipientId,
+        remoteId: eventData.remoteId || eventData.messageId,
+        timestamp: eventData.timestamp || Date.now(),
+        type: eventData.type,
+        body: eventData.body,
+        providerRaw: eventData,
+      } as any;
+
+      // If attachments array with url exists, attach mediaUrl for fallback
+      if (Array.isArray(eventData.attachments) && eventData.attachments.length > 0) {
+        const att = eventData.attachments[0];
+        (eventDto as any).mediaUrl = att?.payload?.url;
+      }
+
+      this.logger.log(`🔥 RECEIVED FB NATS MESSAGE: ${eventDto.remoteId} from ${eventDto.senderId}`);
+      await this.processChannelEvent(eventDto);
+    } catch (error) {
+      this.logger.error(`Failed to process Facebook channel event: ${error.message}`, error.stack);
+    }
+  }
+
   private async connectAndSubscribe() {
     try {
       this.natsConnection = await connect({
@@ -47,6 +87,15 @@ export class ChannelEventsConsumer implements OnModuleInit {
       (async () => {
         for await (const msg of sub) {
           await this.handleChannelEventSimple(msg);
+        }
+      })();
+
+      // Subscribe to simple Facebook events (non-JS)
+      const subFb = this.natsConnection.subscribe('channel.facebook.*.received');
+      this.logger.log('🎯 Subscribed to: channel.facebook.*.received');
+      (async () => {
+        for await (const msg of subFb) {
+          await this.handleFacebookEventSimple(msg);
         }
       })();
 
