@@ -17,6 +17,9 @@ export class WebhookEvent {
   @Prop({ required: true, index: true })
   companyId: string;
 
+  @Prop({ required: false, index: true })
+  idempotencyKey?: string;
+
   @Prop({ required: true })
   receivedAt: Date;
 
@@ -42,6 +45,12 @@ export const WebhookEventSchema = SchemaFactory.createForClass(WebhookEvent);
 WebhookEventSchema.index(
   { channel: 1, remoteId: 1, companyId: 1 },
   { unique: true, name: 'webhook_event_idempotency' }
+);
+
+// Direct index for fast lookup by idempotency key when present
+WebhookEventSchema.index(
+  { idempotencyKey: 1 },
+  { name: 'webhook_event_idempotency_key' }
 );
 
 // Index for cleanup queries

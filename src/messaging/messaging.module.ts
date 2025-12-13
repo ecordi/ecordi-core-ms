@@ -17,8 +17,13 @@ import { ChannelEventsConsumer } from './consumers/channel-events.consumer';
 import { ChannelEventsDLQConsumer } from './consumers/channel-events-dlq.consumer';
 import { ProcessAttachmentsService } from './helpers/process-attachments';
 import { NewMessagesController } from './controllers/new-messages.controller';
+import { MessagesController } from './controllers/messages.controller';
 import { MessagesGateway } from './gateways/messages.gateway';
 import { MessagingWebSocketGateway } from '../websocket/websocket.gateway';
+import { IdempotencyInterceptor } from '../common/interceptors/idempotency.interceptor';
+import { EnsureCompanyInterceptor } from '../common/interceptors/ensure-company.interceptor';
+import { PublisherService } from './nats/publisher.service';
+import { NewMessagesService } from './services/new-messages.service';
 
 @Module({
   imports: [
@@ -44,15 +49,19 @@ import { MessagingWebSocketGateway } from '../websocket/websocket.gateway';
       },
     ]),
   ],
-  controllers: [ThreadController],
+  controllers: [ThreadController, NewMessagesController, MessagesController],
   providers: [
     MessageStoreService,
+    NewMessagesService,
     ThreadService,
     MessagingService,
+    PublisherService,
     ChannelEventsConsumer,
     MediaFetcherConsumer,
     ProcessAttachmentsService,
     MessagingWebSocketGateway,
+    IdempotencyInterceptor,
+    EnsureCompanyInterceptor,
   ],
   exports: [MessageStoreService, MessagingService],
 })

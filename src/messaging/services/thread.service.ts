@@ -139,21 +139,50 @@ export class ThreadService {
     companyId: string,
     page: number = 1,
     limit: number = 20,
-    status: string = 'active'
+    status: string = 'active',
+    options?: {
+      channel?: string;
+      type?: 'dm' | 'task' | 'group';
+      connectionId?: string;
+      contactId?: string;
+      from?: Date | string;
+      to?: Date | string;
+      q?: string; // free-text search on contactName/lastMessageText/contactPhone/contactEmail
+    }
   ): Promise<{ threads: ThreadDocument[]; total: number }> {
     const skip = (page - 1) * limit;
-    
-    const threads = await this.threadModel
-      .find({ companyId, status })
+
+    const query: any = { companyId };
+    if (status) query.status = status;
+    if (options?.channel) query.channel = options.channel;
+    if (options?.type) query.type = options.type;
+    if (options?.connectionId) query.connectionId = options.connectionId;
+    if (options?.contactId) query.contactId = options.contactId;
+
+    if (options?.from || options?.to) {
+      query.lastMessageAt = {} as any;
+      if (options.from) query.lastMessageAt.$gte = new Date(options.from);
+      if (options.to) query.lastMessageAt.$lte = new Date(options.to);
+    }
+
+    // Build MongoDB find with optional text search
+    const find = this.threadModel.find(query);
+    if (options?.q) {
+      // text search uses the defined text index on the collection
+      find.where({ $text: { $search: options.q } });
+    }
+
+    const threads = await find
       .sort({ lastMessageAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .exec();
 
-    const total = await this.threadModel.countDocuments({
-      companyId,
-      status
-    });
+    // Count uses same filter (note: Mongo can't combine $text easily in countDocuments via same builder)
+    const countFilter: any = { ...query };
+    const total = await this.threadModel.countDocuments(
+      options?.q ? { ...countFilter, $text: { $search: options.q } } : countFilter
+    );
 
     return { threads, total };
   }

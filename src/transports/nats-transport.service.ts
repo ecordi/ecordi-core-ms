@@ -39,8 +39,8 @@ export class NatsTransportService {
     return this.send<T>(subject, payload);
   }
 
-  async sendConnectionRegister<T = any>(payload: any): Promise<T> {
-    return this.send<T>('whatsapp.connection.register', payload);
+  async sendConnectionRegister(payload: any): Promise<void> {
+    await this.publish('whatsapp.connection.register', payload);
   }
 
   // Facebook: Send Messenger messages

@@ -21,6 +21,7 @@ import { MessagingModule } from './messaging/messaging.module';
 import { TasksModule } from './tasks/tasks.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { FacebookModule } from './facebook/facebook.module';
+import { LinkedInModule } from './linkedin/linkedin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -63,6 +64,7 @@ import { AppService } from './app.service';
     MessagingModule,
     InstagramModule,
     FacebookModule,
+    LinkedInModule,
   ],
   controllers: [AppController],
   providers: [AppService],

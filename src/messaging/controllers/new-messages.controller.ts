@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseInterceptors } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { NewMessagesService } from '../services/new-messages.service';
 import { ProcessChannelEventDto, CreateInternalNoteDto, SendOutboundMessageDto } from '../dto/process-channel-event.dto';
+import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
 
 @ApiTags('messages')
 @Controller('messages')
@@ -9,6 +10,7 @@ export class NewMessagesController {
   constructor(private readonly newMessagesService: NewMessagesService) {}
 
   @Post('channel-event')
+  @UseInterceptors(IdempotencyInterceptor)
   @ApiOperation({ summary: 'Process incoming channel event' })
   @ApiResponse({ status: 201, description: 'Event processed successfully' })
   async processChannelEvent(@Body() dto: ProcessChannelEventDto) {

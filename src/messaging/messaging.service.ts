@@ -74,6 +74,7 @@ export class MessagingService {
     recipientId: string,
     templateName: string,
     templateParams: any[] = [],
+    language?: { code: string },
   ): Promise<any> {
     this.logger.log(`Sending template ${templateName} to ${recipientId} via connection ${connectionId}`);
     
@@ -85,7 +86,7 @@ export class MessagingService {
           type: 'template',
           template: {
             name: templateName,
-            language: { code: 'es' },
+            language: language || { code: 'es' },
             components: templateParams.length > 0 ? [
               {
                 type: 'body',
@@ -96,7 +97,7 @@ export class MessagingService {
         }
       };
 
-      // Send via NATS to WhatsApp Channel MS
+      // Send via NATS to WhatsApp Channel MS (use same pattern as text messages for now)
       const result = await this.natsTransportService.send('send_whatsapp_message', payload);
       
       this.logger.log(`Template sent successfully: ${JSON.stringify(result)}`);

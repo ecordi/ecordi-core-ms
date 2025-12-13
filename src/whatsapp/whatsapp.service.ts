@@ -13,6 +13,6 @@ export class WhatsAppService {
 
   async sendTemplate(input: { companyId: string; connectionId?: string; connectionRefId?: string; phoneNumberId?: string; to: string; name: string; language: { code: string }; components?: any[] }) {
     const templateParams = input.components?.map(comp => comp.parameters?.[0]?.text || '') || [];
-    return this.messaging.sendTemplate(input.connectionId, input.to, input.name, templateParams);
+    return this.messaging.sendTemplate(input.connectionId, input.to, input.name, templateParams, input.language);
   }
 }

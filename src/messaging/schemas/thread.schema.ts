@@ -63,3 +63,19 @@ ThreadSchema.index({ companyId: 1, taskId: 1 });
 ThreadSchema.index({ companyId: 1, contactId: 1 });
 ThreadSchema.index({ companyId: 1, status: 1, lastMessageAt: -1 });
 ThreadSchema.index({ remoteThreadId: 1, connectionId: 1 });
+
+// Additional indexes for company-wide search
+// Filter by company + channel + status ordered by last activity
+ThreadSchema.index({ companyId: 1, channel: 1, status: 1, lastMessageAt: -1 });
+
+// Text search across contact info and last message
+// Note: text indexes are limited to one per collection; combine fields here
+ThreadSchema.index(
+  {
+    contactName: 'text',
+    lastMessageText: 'text',
+    contactPhone: 'text',
+    contactEmail: 'text',
+  },
+  { name: 'thread_text_search' }
+);

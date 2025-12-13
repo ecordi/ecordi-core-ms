@@ -6,11 +6,15 @@ import {
   Param,
   HttpException,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { ThreadService, ThreadWithMessages } from '../services/thread.service';
+import { EnsureCompanyInterceptor } from '../../common/interceptors/ensure-company.interceptor';
+import { CompanyId } from '../../common/decorators/company-id.decorator';
 
 @ApiTags('Threads')
+@UseInterceptors(EnsureCompanyInterceptor)
 @Controller('api/v1/core/threads')
 export class ThreadController {
   constructor(private readonly threadService: ThreadService) {}
@@ -21,7 +25,6 @@ export class ThreadController {
   @Get('task/:taskId')
   @ApiOperation({ summary: 'Get thread messages by taskId' })
   @ApiParam({ name: 'taskId', description: 'Task ID to fetch thread for' })
-  @ApiQuery({ name: 'companyId', description: 'Company ID', required: true })
   @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
   @ApiQuery({ name: 'limit', description: 'Messages per page', required: false, type: Number })
   @ApiResponse({
@@ -82,7 +85,7 @@ export class ThreadController {
   @ApiResponse({ status: 404, description: 'Thread not found' })
   async getThreadByTaskId(
     @Param('taskId') taskId: string,
-    @Query('companyId') companyId: string,
+    @CompanyId() companyId: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '50'
   ): Promise<{
@@ -95,10 +98,6 @@ export class ThreadController {
       totalPages: number;
     };
   }> {
-    if (!companyId) {
-      throw new HttpException('companyId is required', HttpStatus.BAD_REQUEST);
-    }
-
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
 
@@ -130,10 +129,16 @@ export class ThreadController {
    */
   @Get()
   @ApiOperation({ summary: 'Get all threads for a company' })
-  @ApiQuery({ name: 'companyId', description: 'Company ID', required: true })
   @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
   @ApiQuery({ name: 'limit', description: 'Threads per page', required: false, type: Number })
   @ApiQuery({ name: 'status', description: 'Thread status filter', required: false, enum: ['active', 'archived', 'closed'] })
+  @ApiQuery({ name: 'channel', description: 'Channel filter (whatsapp, instagram, linkedin, email, ...)', required: false })
+  @ApiQuery({ name: 'type', description: 'Thread type filter', required: false, enum: ['dm', 'task', 'group'] })
+  @ApiQuery({ name: 'connectionId', description: 'Filter by connectionId', required: false })
+  @ApiQuery({ name: 'contactId', description: 'Filter by contactId', required: false })
+  @ApiQuery({ name: 'from', description: 'From date (ISO)', required: false })
+  @ApiQuery({ name: 'to', description: 'To date (ISO)', required: false })
+  @ApiQuery({ name: 'q', description: 'Free-text search (contact name/phone/email or last message)', required: false })
   @ApiResponse({
     status: 200,
     description: 'Threads retrieved successfully',
@@ -154,10 +159,17 @@ export class ThreadController {
     }
   })
   async getThreadsByCompany(
-    @Query('companyId') companyId: string,
+    @CompanyId() companyId: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '20',
-    @Query('status') status: string = 'active'
+    @Query('status') status: string = 'active',
+    @Query('channel') channel?: string,
+    @Query('type') type?: 'dm' | 'task' | 'group',
+    @Query('connectionId') connectionId?: string,
+    @Query('contactId') contactId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('q') q?: string,
   ): Promise<{
     threads: any[];
     total: number;
@@ -167,10 +179,6 @@ export class ThreadController {
       totalPages: number;
     };
   }> {
-    if (!companyId) {
-      throw new HttpException('companyId is required', HttpStatus.BAD_REQUEST);
-    }
-
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 20;
 
@@ -178,7 +186,8 @@ export class ThreadController {
       companyId,
       pageNum,
       limitNum,
-      status
+      status,
+      { channel, type, connectionId, contactId, from, to, q }
     );
 
     return {
@@ -198,17 +207,12 @@ export class ThreadController {
   @Put(':threadId/archive')
   @ApiOperation({ summary: 'Archive a thread' })
   @ApiParam({ name: 'threadId', description: 'Thread ID to archive' })
-  @ApiQuery({ name: 'companyId', description: 'Company ID', required: true })
   @ApiResponse({ status: 200, description: 'Thread archived successfully' })
   @ApiResponse({ status: 404, description: 'Thread not found' })
   async archiveThread(
     @Param('threadId') threadId: string,
-    @Query('companyId') companyId: string
+    @CompanyId() companyId: string
   ): Promise<{ success: boolean; message: string }> {
-    if (!companyId) {
-      throw new HttpException('companyId is required', HttpStatus.BAD_REQUEST);
-    }
-
     const success = await this.threadService.archiveThread(companyId, threadId);
     
     if (!success) {
@@ -227,17 +231,12 @@ export class ThreadController {
   @Put(':threadId/close')
   @ApiOperation({ summary: 'Close a thread' })
   @ApiParam({ name: 'threadId', description: 'Thread ID to close' })
-  @ApiQuery({ name: 'companyId', description: 'Company ID', required: true })
   @ApiResponse({ status: 200, description: 'Thread closed successfully' })
   @ApiResponse({ status: 404, description: 'Thread not found' })
   async closeThread(
     @Param('threadId') threadId: string,
-    @Query('companyId') companyId: string
+    @CompanyId() companyId: string
   ): Promise<{ success: boolean; message: string }> {
-    if (!companyId) {
-      throw new HttpException('companyId is required', HttpStatus.BAD_REQUEST);
-    }
-
     const success = await this.threadService.closeThread(companyId, threadId);
     
     if (!success) {
@@ -255,7 +254,6 @@ export class ThreadController {
    */
   @Get('stats')
   @ApiOperation({ summary: 'Get thread statistics for a company' })
-  @ApiQuery({ name: 'companyId', description: 'Company ID', required: true })
   @ApiResponse({
     status: 200,
     description: 'Thread statistics retrieved successfully',
@@ -270,17 +268,13 @@ export class ThreadController {
     }
   })
   async getThreadStats(
-    @Query('companyId') companyId: string
+    @CompanyId() companyId: string
   ): Promise<{
     active: number;
     archived: number;
     closed: number;
     totalMessages: number;
   }> {
-    if (!companyId) {
-      throw new HttpException('companyId is required', HttpStatus.BAD_REQUEST);
-    }
-
     return await this.threadService.getThreadStats(companyId);
   }
 }

@@ -169,4 +169,58 @@ export class MessageStoreService {
 
     return this.messageModel.find(filter).sort({ createdAt: 1 }).exec();
   }
+
+  async listCompanyMessages(params: {
+    companyId: string;
+    page?: number;
+    limit?: number;
+    taskId?: string;
+    direction?: 'inbound' | 'outbound' | 'internal';
+    type?: string;
+    status?: 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'received';
+    from?: Date | string;
+    to?: Date | string;
+    q?: string; // search in body/fromId/toId
+    sort?: 'asc' | 'desc';
+    includeInternal?: boolean;
+  }): Promise<{ items: MessageDocument[]; total: number; page: number; limit: number } > {
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    const filter: any = { companyId: params.companyId };
+    if (params.taskId) filter.taskId = new Types.ObjectId(params.taskId);
+    if (params.direction) filter.direction = params.direction;
+    if (params.type) filter.type = params.type;
+    if (params.status) filter.status = params.status;
+    if (params.from || params.to) {
+      filter.createdAt = {} as any;
+      if (params.from) filter.createdAt.$gte = new Date(params.from);
+      if (params.to) filter.createdAt.$lte = new Date(params.to);
+    }
+    if (params.includeInternal === false) {
+      filter.isInternal = { $ne: true };
+    }
+
+    const find = this.messageModel.find(filter);
+    if (params.q) {
+      // Basic regex search. For performance, consider adding a text index later.
+      const regex = new RegExp(params.q, 'i');
+      find.where({ $or: [{ body: regex }, { fromId: regex }, { toId: regex }] });
+    }
+
+    const items = await find
+      .sort({ createdAt: params.sort === 'asc' ? 1 : -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await this.messageModel.countDocuments(
+      params.q
+        ? { ...filter, $or: [{ body: new RegExp(params.q, 'i') }, { fromId: new RegExp(params.q, 'i') }, { toId: new RegExp(params.q, 'i') }] }
+        : filter
+    );
+
+    return { items, total, page, limit };
+  }
 }

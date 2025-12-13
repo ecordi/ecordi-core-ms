@@ -1,0 +1,13 @@
+{
+  "name": "core-inbound",
+  "durable_name": "core-inbound",
+  "deliver_subject": "q.core.inbound",
+  "ack_policy": "explicit",
+  "ack_wait": 60000000000,
+  "max_deliver": 10,
+  "filter_subject": "company.*.channel.*.message.received",
+  "replay_policy": "instant",
+  "deliver_policy": "all",
+  "max_ack_pending": 200,
+  "backoff": [1000000000, 5000000000, 15000000000]
+}
