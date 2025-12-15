@@ -640,39 +640,87 @@ export class ConnectionsService implements OnModuleInit {
         throw new Error('Invalid token received from Meta');
       }
 
-      // Try to get the actual phone number ID using the token
-      this.logger.log('Token validated successfully, attempting to get phone number ID');
-      
-      try {
-        // Try to get WhatsApp Business Account phone numbers
-        const phoneResponse = await axios.get(`https://graph.facebook.com/v20.0/me/phone_numbers`, {
-          params: {
-            access_token: shortLivedToken
-          }
-        });
-        
-        if (phoneResponse.data?.data && phoneResponse.data.data.length > 0) {
-          const phoneNumberId = phoneResponse.data.data[0].id;
-          this.logger.log(`✅ Found phone number ID: ${phoneNumberId}`);
-          
-          return {
-            shortLivedToken,
-            phoneNumberId,
-            wabaId: phoneResponse.data.data[0].waba_id || 'PLACEHOLDER_WABA_ID',
-            displayName: phoneResponse.data.data[0].verified_name || 'WhatsApp Business'
-          };
-        }
-      } catch (phoneError) {
-        this.logger.warn(`Failed to get phone numbers: ${phoneError.message}`);
+      // 3. Exchange for long-lived token
+      const longLivedResponse = await axios.get("https://graph.facebook.com/v18.0/oauth/access_token", {
+        params: {
+          grant_type: 'fb_exchange_token',
+          client_id: appId,
+          client_secret: appSecret,
+          fb_exchange_token: shortLivedToken,
+        },
+      });
+
+      const longLivedToken = longLivedResponse.data.access_token;
+      this.logger.log('Successfully obtained long-lived token');
+
+      // 4. Get app token for debug_token call
+      const appTokenResponse = await axios.get("https://graph.facebook.com/v18.0/oauth/access_token", {
+        params: {
+          client_id: appId,
+          client_secret: appSecret,
+          grant_type: 'client_credentials',
+        },
+      });
+
+      const appToken = appTokenResponse.data.access_token;
+
+      // 5. Get debug token info to find WABA IDs
+      const debugTokenResponse = await axios.get(`https://graph.facebook.com/v18.0/debug_token`, {
+        params: {
+          input_token: longLivedToken,
+          access_token: appToken
+        },
+      });
+
+      const debugTokenData = debugTokenResponse.data?.data;
+      if (!debugTokenData || !debugTokenData.is_valid) {
+        throw new Error('Invalid long-lived token');
       }
 
-      // Fallback: use the known working phone number ID
-      this.logger.log('Using known working phone number ID as fallback');
+      // 6. Find WABA IDs from granular scopes
+      const whatsappBusinessManagement: string[] = [];
+      const whatsappBusinessMessaging: string[] = [];
+
+      debugTokenData.granular_scopes?.forEach((granularScope: any) => {
+        if (granularScope.scope === 'whatsapp_business_management') {
+          whatsappBusinessManagement.push(...granularScope.target_ids);
+        }
+        if (granularScope.scope === 'whatsapp_business_messaging') {
+          whatsappBusinessMessaging.push(...granularScope.target_ids);
+        }
+      });
+
+      if (whatsappBusinessManagement.length === 0 || whatsappBusinessMessaging.length === 0) {
+        throw new Error('WABA IDs not found in token scopes');
+      }
+
+      const wabaIds: string[] = whatsappBusinessManagement.filter((elem) =>
+        whatsappBusinessMessaging.includes(elem),
+      );
+
+      if (wabaIds.length === 0) {
+        throw new Error('No valid WABA IDs found');
+      }
+
+      // 7. Get phone numbers for the first WABA
+      const wabaId = wabaIds[0];
+      const phoneNumbersResponse = await axios.get(`https://graph.facebook.com/v18.0/${wabaId}/phone_numbers`, {
+        headers: {
+          Authorization: `Bearer ${longLivedToken}`,
+        },
+      });
+
+      if (!phoneNumbersResponse.data?.data || phoneNumbersResponse.data.data.length === 0) {
+        throw new Error('Phone Numbers not found');
+      }
+
+      const phoneNumber = phoneNumbersResponse.data.data[0];
+      
       return {
-        shortLivedToken,
-        phoneNumberId: '781255131739768', // Your working phone number ID
-        wabaId: 'PLACEHOLDER_WABA_ID',
-        displayName: 'WhatsApp Business'
+        shortLivedToken: longLivedToken, // Return long-lived token
+        phoneNumberId: phoneNumber.id,
+        wabaId: wabaId,
+        displayName: phoneNumber.verified_name || phoneNumber.display_phone_number || 'WhatsApp Business'
       };
     } catch (error) {
       this.logger.error(`Token exchange or phone data fetch failed: ${error.message}`);
