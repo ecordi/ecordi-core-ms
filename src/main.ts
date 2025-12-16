@@ -44,7 +44,7 @@ async function bootstrap() {
     'http://localhost:3000',
     'https://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://k57cpbpk-3001.brs.devtunnels.ms'
+    'https://ecordi-core-ms-production.up.railway.app/'
   ];
   
   // Add ALLOWED_ORIGINS from env if present
