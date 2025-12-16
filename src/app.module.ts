@@ -22,6 +22,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { InstagramModule } from './instagram/instagram.module';
 import { FacebookModule } from './facebook/facebook.module';
 import { LinkedInModule } from './linkedin/linkedin.module';
+import { ContactsModule } from './contacts/contacts.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -62,6 +63,7 @@ import { AppService } from './app.service';
     ChannelsModule,
     TasksModule,
     MessagingModule,
+    ContactsModule,
     InstagramModule,
     FacebookModule,
     LinkedInModule,

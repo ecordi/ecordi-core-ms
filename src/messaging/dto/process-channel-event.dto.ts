@@ -45,6 +45,10 @@ export class ProcessChannelEventDto {
   @IsString()
   senderId: string;
 
+  @IsOptional()
+  @IsString()
+  senderName?: string;
+
   @IsString()
   recipientId: string;
 

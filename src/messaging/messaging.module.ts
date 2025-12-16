@@ -24,10 +24,12 @@ import { IdempotencyInterceptor } from '../common/interceptors/idempotency.inter
 import { EnsureCompanyInterceptor } from '../common/interceptors/ensure-company.interceptor';
 import { PublisherService } from './nats/publisher.service';
 import { NewMessagesService } from './services/new-messages.service';
+import { ContactsModule } from '../contacts/contacts.module';
 
 @Module({
   imports: [
     forwardRef(() => TasksModule),
+    ContactsModule,
     TransportsModule,
     MongooseModule.forFeature([
       { name: Message.name, schema: MessageSchema },

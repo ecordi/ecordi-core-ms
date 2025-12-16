@@ -11,13 +11,13 @@ import { StrictValidationPipe } from './common/validation.pipe';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
+
   // Crear la aplicación principal HTTP
   const app = await NestFactory.create(AppModule, { rawBody: true });
-  
+
   // Obtener servicio de configuración
   const configService = app.get(ConfigService);
-  
+
   // Configurar la aplicación como microservicio NATS
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.NATS,
@@ -32,7 +32,6 @@ async function bootstrap() {
 
   // Registrar filtro global de excepciones
   app.useGlobalFilters(new HttpExceptionFilter());
-
   // Security middlewares
   app.use(helmet());
   app.use(cookieParser(configService.get<string>('SESSION_SECRET') || 'dev_session'));
@@ -40,19 +39,35 @@ async function bootstrap() {
   // Avoid noisy 404 logs for /favicon.ico (Swagger UI and browsers request it by default)
   app.use('/favicon.ico', (_req, res) => res.status(204).end());
 
-  // CORS
-  const origins = (configService.get<string>('ALLOWED_ORIGINS') || '').split(',').map((o) => o.trim()).filter(Boolean);
+  // CORS - Allow frontend and DevTunnels
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://k57cpbpk-3001.brs.devtunnels.ms'
+  ];
+  
+  // Add ALLOWED_ORIGINS from env if present
+  const envOrigins = (configService.get<string>('ALLOWED_ORIGINS') || '').split(',').map((o) => o.trim()).filter(Boolean);
+  allowedOrigins.push(...envOrigins);
+
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || origins.length === 0 || origins.includes(origin)) return callback(null, true);
-      return callback(new Error('Not allowed by CORS'));
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-core-signature', 'X-Hub-Signature-256'],
     exposedHeaders: ['Content-Type'],
   });
-  
+
   // Configuración de Swagger para documentación
   const config = new DocumentBuilder()
     .setTitle('Core Microservice API')
@@ -62,14 +77,14 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
-  
+
   // Obtener puerto de configuración
   const port = configService.get<number>('PORT', 3001);
-  
+
   // Iniciar microservicio NATS
   await app.startAllMicroservices();
   logger.log(' NATS Microservice is running');
-  
+
   // Iniciar servidor HTTP
   await app.listen(port, '0.0.0.0');
   logger.log(` Environment: ${process.env.NODE_ENV || 'development'}`);

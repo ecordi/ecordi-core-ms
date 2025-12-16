@@ -90,6 +90,24 @@ export class ChannelEventsConsumer implements OnModuleInit {
         }
       })();
 
+      // Subscribe to WhatsApp message status updates
+      const subStatus = this.natsConnection.subscribe('js.channel.whatsapp.message.status.*.*.*');
+      this.logger.log('🎯 Subscribed to: js.channel.whatsapp.message.status.*.*.*');
+      (async () => {
+        for await (const msg of subStatus) {
+          await this.handleMessageStatusUpdate(msg);
+        }
+      })();
+
+      // Subscribe to legacy status updates for backward compatibility
+      const subLegacyStatus = this.natsConnection.subscribe('channel.whatsapp.message.status');
+      this.logger.log('🎯 Subscribed to: channel.whatsapp.message.status');
+      (async () => {
+        for await (const msg of subLegacyStatus) {
+          await this.handleMessageStatusUpdate(msg);
+        }
+      })();
+
       // Subscribe to simple Facebook events (non-JS)
       const subFb = this.natsConnection.subscribe('channel.facebook.*.received');
       this.logger.log('🎯 Subscribed to: channel.facebook.*.received');
@@ -156,6 +174,63 @@ export class ChannelEventsConsumer implements OnModuleInit {
       await this.processChannelEvent(eventDto);
     } catch (error) {
       this.logger.error(`Failed to process channel event: ${error.message}`, error.stack);
+    }
+  }
+
+  async handleMessageStatusUpdate(msg: Msg) {
+    try {
+      const rawData = new TextDecoder().decode(msg.data);
+      this.logger.debug(`Raw status update data: ${rawData}`);
+      
+      const statusData = JSON.parse(rawData);
+      
+      if (!statusData) {
+        this.logger.error('❌ No status data in NATS message');
+        return;
+      }
+
+      const { messageId, externalMessageId, status, timestamp, metadata } = statusData;
+      const remoteId = externalMessageId || messageId;
+
+      if (!remoteId || !status) {
+        this.logger.error('❌ Missing required fields in status update:', { remoteId, status });
+        return;
+      }
+
+      this.logger.log(`📊 STATUS UPDATE RECEIVED: ${remoteId} -> ${status}`);
+
+      // Update message status in database
+      const updateResult = await this.messageModel.updateOne(
+        { remoteId: remoteId },
+        { 
+          $set: { 
+            status: status,
+            updatedAt: new Date()
+          } 
+        }
+      );
+
+      if (updateResult.matchedCount === 0) {
+        this.logger.warn(`⚠️ No message found with remoteId: ${remoteId}`);
+        return;
+      }
+
+      if (updateResult.modifiedCount > 0) {
+        this.logger.log(`✅ MESSAGE STATUS UPDATED: ${remoteId} -> ${status}`);
+
+        // Get the updated message for real-time notification
+        const updatedMessage = await this.messageModel.findOne({ remoteId }).exec();
+        
+        if (updatedMessage) {
+          // Publish real-time status update to frontend
+          await this.publishStatusUpdate(updatedMessage, status);
+        }
+      } else {
+        this.logger.debug(`📊 Status already up to date for message: ${remoteId}`);
+      }
+
+    } catch (error) {
+      this.logger.error(`Failed to process message status update: ${error.message}`, error.stack);
     }
   }
 
@@ -458,6 +533,33 @@ export class ChannelEventsConsumer implements OnModuleInit {
       this.logger.debug(`Real-time event published for message ${messageDoc._id}`);
     } catch (error) {
       this.logger.error(`Failed to publish real-time event: ${error.message}`);
+    }
+  }
+
+  private async publishStatusUpdate(messageDoc: MessageDocument, status: string): Promise<void> {
+    try {
+      const statusPayload = {
+        messageId: messageDoc._id.toString(),
+        remoteId: messageDoc.remoteId,
+        status: status,
+        timestamp: new Date().toISOString(),
+        companyId: messageDoc.companyId,
+        connectionId: messageDoc.connectionId,
+        taskId: messageDoc.taskId?.toString(),
+        threadId: (messageDoc as any).threadId?.toString()
+      };
+
+      // Emit status update to company room
+      this.websocketGateway.emitMessageStatusUpdate(messageDoc.companyId, statusPayload);
+      
+      // If message belongs to a task, emit to task-specific room
+      if (messageDoc.taskId) {
+        this.websocketGateway.emitTaskMessageStatusUpdate(messageDoc.taskId.toString(), statusPayload);
+      }
+
+      this.logger.debug(`📡 Real-time status update published: ${messageDoc.remoteId} -> ${status}`);
+    } catch (error) {
+      this.logger.error(`Failed to publish status update: ${error.message}`);
     }
   }
 }

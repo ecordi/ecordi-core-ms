@@ -86,6 +86,20 @@ export class MessagingWebSocketGateway implements OnGatewayConnection, OnGateway
     this.logger.log(`Emitted task.message.created to room: ${room}`);
   }
 
+  // Emit message status update event to company room
+  emitMessageStatusUpdate(companyId: string, statusUpdate: any) {
+    const room = `company:${companyId}`;
+    this.server.to(room).emit('message.status.updated', statusUpdate);
+    this.logger.log(`Emitted message.status.updated to room: ${room} - ${statusUpdate.remoteId} -> ${statusUpdate.status}`);
+  }
+
+  // Emit task message status update event to task-specific room
+  emitTaskMessageStatusUpdate(taskId: string, statusUpdate: any) {
+    const room = `task:${taskId}`;
+    this.server.to(room).emit('task.message.status.updated', statusUpdate);
+    this.logger.log(`Emitted task.message.status.updated to room: ${room} - ${statusUpdate.remoteId} -> ${statusUpdate.status}`);
+  }
+
   @SubscribeMessage('join-task')
   handleJoinTask(
     @MessageBody() data: { taskId: string },

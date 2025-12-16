@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ProcessChannelEventDto, CreateInternalNoteDto, SendOutboundMessageDto } from '../dto/process-channel-event.dto';
 import { MessageStoreService } from './message-store.service';
 import { Task, TaskDocument } from '../../tasks/schemas/task.schema';
 import { ProcessAttachmentsService, AttachmentDto } from '../helpers/process-attachments';
+import { NatsTransportService } from '../../transports/nats-transport.service';
+import { ContactsService } from '../../contacts/services/contacts.service';
 
 export type UploadedFileRef = {
   fileId: string;
@@ -18,14 +20,39 @@ export type UploadedFileRef = {
 
 @Injectable()
 export class NewMessagesService {
+  private readonly logger = new Logger(NewMessagesService.name);
+
   constructor(
     private readonly store: MessageStoreService,
     @InjectModel(Task.name) private readonly taskModel: Model<TaskDocument>,
     private readonly attachmentsService: ProcessAttachmentsService,
+    private readonly natsTransport: NatsTransportService,
+    private readonly contactsService: ContactsService,
   ) {}
 
   async processChannelEvent(dto: ProcessChannelEventDto) {
     const channelType = dto.channel === 'whatsapp' ? 'whatsapp_cloud' : dto.channel;
+    
+    // Create or update contact information
+    let contact = null;
+    try {
+      contact = await this.contactsService.findOrCreateContact(
+        dto.companyId,
+        dto.senderId,
+        {
+          name: dto.senderName || dto.senderId,
+          whatsappName: dto.senderName,
+          metadata: {
+            isWhatsAppUser: channelType === 'whatsapp_cloud',
+            lastSeen: new Date(),
+          },
+        }
+      );
+      this.logger.log(`Contact processed: ${contact._id} for phone: ${dto.senderId}`);
+    } catch (error) {
+      this.logger.error(`Failed to process contact for ${dto.senderId}: ${error.message}`);
+    }
+
     const task = await this.store.findOrCreateTaskForConversation({
       companyId: dto.companyId,
       channelType,
@@ -130,8 +157,16 @@ export class NewMessagesService {
   }
 
   async sendOutbound(dto: SendOutboundMessageDto) {
+    this.logger.debug(`Looking for task: ${dto.taskId} in company: ${dto.companyId}`);
+    
     const task = await this.taskModel.findOne({ _id: new Types.ObjectId(dto.taskId), companyId: dto.companyId }).exec();
-    if (!task) throw new Error('Task not found');
+    if (!task) {
+      this.logger.error(`Task not found: ${dto.taskId} in company: ${dto.companyId}`);
+      // Try to find any task for debugging
+      const allTasks = await this.taskModel.find({ companyId: dto.companyId }).limit(5).exec();
+      this.logger.debug(`Available tasks for company ${dto.companyId}:`, allTasks.map(t => ({ id: t._id, customerId: t.customerId })));
+      throw new Error(`Task not found: ${dto.taskId}`);
+    }
 
     let kbFiles: UploadedFileRef[] = [];
     if (dto.media && dto.media.length > 0) {
@@ -177,24 +212,98 @@ export class NewMessagesService {
       kbFiles,
     });
 
+    // Send message to Channel-MS via NATS
+    this.logger.log(`Sending outbound message to Channel-MS: ${queued.messageId}`);
+    try {
+      const natsPayload = {
+        messageId: queued.messageId,
+        companyId: task.companyId,
+        connectionId: task.connectionId,
+        recipientId: dto.recipientId,
+        message: {
+          type: dto.type,
+          text: dto.type === 'text' ? { body: dto.body } : undefined,
+          template: dto.type === 'template' ? JSON.parse(dto.body) : undefined
+        }
+      };
+
+      // Use the existing NATS transport to send to Channel-MS
+      await this.natsTransport.send('send_whatsapp_message', natsPayload);
+      this.logger.log(`Message sent to Channel-MS successfully: ${queued.messageId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send message to Channel-MS: ${error.message}`);
+      // Note: Message status update would need to be implemented in MessageStoreService
+      this.logger.error(`Message ${queued.messageId} failed to send to Channel-MS`);
+    }
+
     return { success: true, messageId: queued.messageId, dbId: queued._id.toString() };
   }
 
   async listTaskMessages(taskId: string, includeInternal: boolean) {
     const msgs = await this.store.listByTask({ taskId, includeInternal });
-    return msgs.map(m => ({
-      id: m._id.toString(),
-      taskId: m.taskId.toString(),
-      direction: m.direction,
-      isInternal: m.isInternal,
-      type: m.type,
-      body: m.body,
-      fromId: m.fromId,
-      toId: m.toId,
-      kbFiles: m.kbFiles,
-      status: m.status,
-      createdAt: (m as any).createdAt,
-    }));
+    
+    // Get task to find company ID
+    const task = await this.taskModel.findById(taskId).exec();
+    if (!task) {
+      throw new Error('Task not found');
+    }
+
+    // Enrich messages with contact information
+    const enrichedMessages = await Promise.all(
+      msgs.map(async (m) => {
+        let senderContact = null;
+        let recipientContact = null;
+
+        // Get sender contact info if it's an inbound message
+        if (m.direction === 'inbound' && m.fromId) {
+          try {
+            senderContact = await this.contactsService.findByPhoneNumber(task.companyId, m.fromId);
+          } catch (error) {
+            this.logger.debug(`No contact found for sender ${m.fromId}`);
+          }
+        }
+
+        // Get recipient contact info if it's an outbound message
+        if (m.direction === 'outbound' && m.toId) {
+          try {
+            recipientContact = await this.contactsService.findByPhoneNumber(task.companyId, m.toId);
+          } catch (error) {
+            this.logger.debug(`No contact found for recipient ${m.toId}`);
+          }
+        }
+
+        return {
+          id: m._id.toString(),
+          taskId: m.taskId.toString(),
+          direction: m.direction,
+          isInternal: m.isInternal,
+          type: m.type,
+          body: m.body,
+          fromId: m.fromId,
+          toId: m.toId,
+          kbFiles: m.kbFiles,
+          status: m.status,
+          createdAt: (m as any).createdAt,
+          // Contact enrichment
+          senderContact: senderContact ? {
+            id: senderContact._id.toString(),
+            name: senderContact.name,
+            phoneNumber: senderContact.phoneNumber,
+            profilePicture: senderContact.profilePicture,
+            whatsappName: senderContact.whatsappName,
+          } : null,
+          recipientContact: recipientContact ? {
+            id: recipientContact._id.toString(),
+            name: recipientContact.name,
+            phoneNumber: recipientContact.phoneNumber,
+            profilePicture: recipientContact.profilePicture,
+            whatsappName: recipientContact.whatsappName,
+          } : null,
+        };
+      })
+    );
+
+    return enrichedMessages;
   }
 
   async getTaskById(taskId: string, companyId: string) {
