@@ -44,7 +44,11 @@ async function bootstrap() {
     'http://localhost:3000',
     'https://localhost:3000',
     'http://127.0.0.1:3000',
-    'https://ecordi-core-ms-production.up.railway.app/'
+    'https://ecordi-core-ms-production.up.railway.app',
+    'https://v0-contact-center-platform.vercel.app',
+    'https://ecordi-contact-center.vercel.app',
+    // Allow any vercel.app subdomain for development
+    /^https:\/\/.*\.vercel\.app$/
   ];
   
   // Add ALLOWED_ORIGINS from env if present
@@ -56,7 +60,13 @@ async function bootstrap() {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      if (allowedOrigins.includes(origin)) {
+      // Check exact string matches
+      if (allowedOrigins.some(allowed => typeof allowed === 'string' && allowed === origin)) {
+        return callback(null, true);
+      }
+      
+      // Check regex patterns
+      if (allowedOrigins.some(allowed => allowed instanceof RegExp && allowed.test(origin))) {
         return callback(null, true);
       }
       
