@@ -84,12 +84,15 @@ export class ConnectionsService implements OnModuleInit {
       // Find pending connection with channel=facebook
       const connection = await this.connModel.findOne({ connectionId, companyId, channel: 'facebook', status: ConnectionStatus.PENDING });
       if (!connection) throw new HttpException('Connection not found or not pending', HttpStatus.NOT_FOUND);
-      const metaGraphVersion = this.config.get<string>('META_GRAPH_VERSION');
+      const metaGraphVersion = this.config.get<string>('META_GRAPH_VERSION') || 'v18.0';
       // Exchange code for short-lived token (use Facebook app credentials)
       const appId = this.config.get<string>('FACEBOOK_APP_ID');
       const appSecret = this.config.get<string>('FACEBOOK_APP_SECRET');
       const redirectUri = this.config.get<string>('FACEBOOK_REDIRECT_URI');
       if (!appId || !appSecret || !redirectUri) throw new HttpException('Missing Facebook app configuration', HttpStatus.INTERNAL_SERVER_ERROR);
+
+      this.logger.debug(`[FB OAuth] Using Graph API version: ${metaGraphVersion}`);
+      this.logger.debug(`[FB OAuth] Exchange code for token - appId: ${appId}, redirectUri: ${redirectUri}`);
 
       const response = await axios.get(`https://graph.facebook.com/${metaGraphVersion}/oauth/access_token`, {
         params: { client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code },
@@ -131,14 +134,25 @@ export class ConnectionsService implements OnModuleInit {
 
       // Retrieve userId from Graph API using short-lived token
       const accessTokenToUse = longLivedToken || shortLivedToken;
-      const meResp = await axios.get(`https://graph.facebook.com/${metaGraphVersion}/me`, {
-        params: { fields: 'id', access_token: accessTokenToUse },
-      });
-      console.log("🚀 ~ file: connections.service.ts:136 ~ meResp:", meResp)
-      const userId = meResp?.data?.id;
-      console.log("🚀 ~ file: connections.service.ts:136 ~ userId:", userId)
-      if (!userId) {
-        throw new HttpException('Failed to resolve userId from token', HttpStatus.BAD_REQUEST);
+      this.logger.debug(`[FB OAuth] Getting user info with token: ${accessTokenToUse?.substring(0, 10)}...`);
+      
+      let userId: string;
+      try {
+        const meResp = await axios.get(`https://graph.facebook.com/${metaGraphVersion}/me`, {
+          params: { fields: 'id,name', access_token: accessTokenToUse },
+        });
+        this.logger.debug(`[FB OAuth] User info response: ${JSON.stringify(meResp.data)}`);
+        
+        userId = meResp?.data?.id;
+        if (!userId) {
+          throw new HttpException('Failed to resolve userId from token', HttpStatus.BAD_REQUEST);
+        }
+      } catch (error: any) {
+        this.logger.error(`[FB OAuth] Failed to get user info: ${error.message}`);
+        if (error.response) {
+          this.logger.error(`[FB OAuth] API Error: ${JSON.stringify(error.response.data)}`);
+        }
+        throw new HttpException(`Failed to get user info: ${error.message}`, HttpStatus.BAD_REQUEST);
       }
 
       // Ask Channel-MS (Facebook Channel) to register pages with expected payload shape
