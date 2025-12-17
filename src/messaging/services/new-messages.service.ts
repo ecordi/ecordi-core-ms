@@ -227,13 +227,25 @@ export class NewMessagesService {
         }
       };
 
-      // Use the existing NATS transport to send to Channel-MS
-      await this.natsTransport.send('send_whatsapp_message', natsPayload);
-      this.logger.log(`Message sent to Channel-MS successfully: ${queued.messageId}`);
+      // Use the existing NATS transport to send to Channel-MS and wait for response
+      const response = await this.natsTransport.send('send_whatsapp_message', natsPayload);
+      this.logger.log(`Message sent to Channel-MS successfully: ${queued.messageId}`, { response });
+      
+      // Update message with WhatsApp messageId (wamid) if received in response
+      if (response && response.messageId) {
+        this.logger.log(`Updating message ${queued.messageId} with WhatsApp messageId: ${response.messageId}`);
+        await this.store.updateMessageRemoteId(queued.messageId, response.messageId, 'sent');
+      } else {
+        this.logger.warn(`No WhatsApp messageId received in response for message: ${queued.messageId}`, { response });
+      }
     } catch (error) {
       this.logger.error(`Failed to send message to Channel-MS: ${error.message}`);
-      // Note: Message status update would need to be implemented in MessageStoreService
-      this.logger.error(`Message ${queued.messageId} failed to send to Channel-MS`);
+      // Update message status to failed
+      try {
+        await this.store.updateMessageRemoteId(queued.messageId, '', 'failed');
+      } catch (updateError) {
+        this.logger.error(`Failed to update message status to failed: ${updateError.message}`);
+      }
     }
 
     return { success: true, messageId: queued.messageId, dbId: queued._id.toString() };

@@ -99,22 +99,26 @@ export class MessageStoreService {
   }): Promise<{ messageId: string; _id: Types.ObjectId }> {
     const messageId = uuidv4();
     
-    const doc = await this.messageModel.create({
+    const message = new this.messageModel({
+      messageId,
       taskId: params.taskId,
       companyId: params.companyId,
       channelType: params.channelType,
       connectionId: params.connectionId,
       direction: 'internal',
-      messageId,
+      isInternal: true,
       type: 'text',
       body: params.body,
+      fromId: params.userId || 'system',
+      toId: 'internal',
       kbFiles: params.kbFiles || [],
-      status: 'received',
-      isInternal: true,
-      createdByUserId: params.userId,
+      status: 'sent',
     });
 
-    return { messageId: doc.messageId, _id: doc._id };
+    await message.save();
+    this.logger.log(`Saved internal note: ${messageId}`);
+    
+    return { messageId, _id: message._id };
   }
 
   async saveOutboundQueued(params: {
@@ -155,6 +159,22 @@ export class MessageStoreService {
     });
 
     return { messageId: doc.messageId, _id: doc._id };
+  }
+
+  /**
+   * Update message with remoteId after successful send to Channel-MS
+   */
+  async updateMessageRemoteId(messageId: string, remoteId: string, status: string = 'sent'): Promise<void> {
+    const message = await this.messageModel.findOne({ messageId }).exec();
+    if (!message) {
+      throw new Error(`Message not found: ${messageId}`);
+    }
+
+    message.remoteId = remoteId;
+    message.status = status as any;
+    await message.save();
+    
+    this.logger.log(`Updated message ${messageId} with remoteId: ${remoteId} and status: ${status}`);
   }
 
   async listByTask(params: {

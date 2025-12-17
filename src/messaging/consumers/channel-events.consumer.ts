@@ -117,8 +117,56 @@ export class ChannelEventsConsumer implements OnModuleInit {
         }
       })();
 
+      // Subscribe to WhatsApp message created events (for wamid updates) - FORCE RELOAD
+      const subMessageCreated = this.natsConnection.subscribe('channel.whatsapp.message.created');
+      this.logger.log('🎯 Subscribed to: channel.whatsapp.message.created');
+      (async () => {
+        for await (const msg of subMessageCreated) {
+          await this.handleWhatsAppMessageCreated(msg);
+        }
+      })();
+
     } catch (error) {
       this.logger.error('Failed to connect to NATS:', error);
+    }
+  }
+
+  async handleWhatsAppMessageCreated(msg: Msg) {
+    try {
+      const rawData = new TextDecoder().decode(msg.data);
+      this.logger.debug(`Raw message created data: ${rawData}`);
+      
+      const messageData = JSON.parse(rawData);
+      
+      if (!messageData) {
+        this.logger.error('❌ No message data in NATS message');
+        return;
+      }
+
+      const { messageId, externalMessageId, status, body, companyId, taskId } = messageData;
+
+      if (!messageId || !externalMessageId) {
+        this.logger.error('❌ Missing required fields in message created event:', { messageId, externalMessageId });
+        return;
+      }
+
+      this.logger.log(`📡 MESSAGE CREATED EVENT: ${messageId} -> wamid: ${externalMessageId}`);
+
+      // Update the message with the wamid from WhatsApp
+      try {
+        await this.messageStoreService.updateMessageRemoteId(messageId, externalMessageId, status || 'sent');
+        this.logger.log(`✅ Updated message ${messageId} with wamid: ${externalMessageId}`);
+        
+        // NOTE: Do NOT emit WebSocket event here - it's already emitted by publishRealtimeEvent
+        // This handler only updates the database with the wamid, the WebSocket event
+        // was already sent when the message was first processed
+        
+      } catch (error) {
+        this.logger.error(`❌ Failed to update message with wamid: ${error.message}`);
+      }
+
+    } catch (error) {
+      this.logger.error(`Failed to process message created event: ${error.message}`, error.stack);
     }
   }
 
@@ -147,7 +195,7 @@ export class ChannelEventsConsumer implements OnModuleInit {
         remoteId: eventData.remoteId || eventData.externalMessageId,
         timestamp: new Date(eventData.timestamp).getTime(),
         type: eventData.type,
-        body: eventData.text,
+        body: eventData.body || eventData.text,
         providerRaw: eventData.rawPayload
       };
 
