@@ -9,6 +9,11 @@ import { AccessControlModule } from './access-control/access-control.module';
 import { CacheModule } from './cache/cache.module';
 import { TransportsModule } from './transports/transports.module';
 import { MailModule } from './mail/mail.module';
+import { OauthModule } from './oauth/oauth.module';
+import { ConnectionsModule } from './connections/connections.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { NatsModule } from './transports/nats.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -36,7 +41,12 @@ import { MailModule } from './mail/mail.module';
     AccessControlModule,
     CacheModule,
     TransportsModule,
+    NatsModule,
     MailModule,
+    OauthModule,
+    ConnectionsModule,
+    WebhooksModule,
+    MessagingModule,
   ],
 })
 export class AppModule {}

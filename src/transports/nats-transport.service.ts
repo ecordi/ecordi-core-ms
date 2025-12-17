@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
+import { NatsConnectionResponse, NatsMessageResponse, NatsBaseResponse } from './types/nats-responses.interface';
 import { firstValueFrom, timeout } from 'rxjs';
 
 @Injectable()
@@ -18,7 +19,7 @@ export class NatsTransportService {
    * @param data Datos a enviar
    * @returns Respuesta del mensaje
    */
-  async send<T>(pattern: string, data: any): Promise<T> {
+  async send<T = NatsBaseResponse>(pattern: string, data: any): Promise<T> {
     try {
       return await firstValueFrom(
         this.natsClient.send<T>(pattern, data).pipe(
@@ -29,6 +30,48 @@ export class NatsTransportService {
       this.logger.error(`Error sending message to ${pattern}`, error);
       throw error;
     }
+  }
+
+  /**
+   * Envía mensaje de registro de conexión WhatsApp
+   */
+  async sendConnectionRegister(data: any): Promise<NatsConnectionResponse> {
+    return this.send<NatsConnectionResponse>('register_whatsapp_connection', data);
+  }
+
+  /**
+   * Envía un mensaje para envío de WhatsApp
+   */
+  async sendWhatsAppMessage(data: any): Promise<NatsMessageResponse> {
+    return this.send<NatsMessageResponse>('whatsapp.send', data);
+  }
+
+  /**
+   * Facebook - Enviar mensajes (Messenger)
+   */
+  async sendFacebookMessage(data: any): Promise<NatsMessageResponse> {
+    return this.send<NatsMessageResponse>('send_facebook_message', data);
+  }
+
+  /**
+   * Facebook - Registro de conexión (exchange token y suscripción)
+   */
+  async registerFacebookConnection(data: any): Promise<NatsConnectionResponse> {
+    return this.send<NatsConnectionResponse>('facebook.connection.register', data);
+  }
+
+  /**
+   * Facebook - Publicar/editar/borrar publicaciones
+   */
+  async publishFacebookFeed(data: any): Promise<NatsBaseResponse> {
+    return this.send<NatsBaseResponse>('facebook.feed.publish', data);
+  }
+
+  /**
+   * Facebook - Publicar/editar/borrar comentarios
+   */
+  async publishFacebookComment(data: any): Promise<NatsBaseResponse> {
+    return this.send<NatsBaseResponse>('facebook.comment.publish', data);
   }
 
   /**
