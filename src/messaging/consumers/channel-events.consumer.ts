@@ -43,6 +43,15 @@ export class ChannelEventsConsumer implements OnModuleInit {
         return;
       }
 
+      // Determine correct message type based on attachments
+      let messageType = eventData.type;
+      if (Array.isArray(eventData.attachments) && eventData.attachments.length > 0) {
+        const att = eventData.attachments[0];
+        if (att?.type) {
+          messageType = att.type; // Use attachment type (audio, image, video, etc.)
+        }
+      }
+
       // Map Facebook webhook event -> ChannelEventDto
       const eventDto: ChannelEventDto & { channelType?: string } = {
         channel: 'facebook',
@@ -54,7 +63,7 @@ export class ChannelEventsConsumer implements OnModuleInit {
         recipientId: eventData.recipientId,
         remoteId: eventData.remoteId || eventData.messageId,
         timestamp: eventData.timestamp || Date.now(),
-        type: eventData.type,
+        type: messageType, // Use corrected message type
         body: eventData.body,
         providerRaw: eventData,
       } as any;

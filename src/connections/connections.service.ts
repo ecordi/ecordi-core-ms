@@ -28,7 +28,7 @@ export class ConnectionsService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly events: EventsService,
     private readonly bus: NatsTransportService
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.logger.log('ConnectionsService initialized');
@@ -103,7 +103,7 @@ export class ConnectionsService implements OnModuleInit {
       // Try to exchange for a long-lived token
       let longLivedToken: string | undefined;
       try {
-        const longResp = await axios.get(`https://graph.facebook.com/${metaGraphVersion}/oauth/access_token`, {
+        const longResp = await axios.get(`https://graph.facebook.com/oauth/access_token`, {
           params: {
             grant_type: 'fb_exchange_token',
             client_id: appId,
@@ -112,7 +112,6 @@ export class ConnectionsService implements OnModuleInit {
           },
         });
         longLivedToken = longResp?.data?.access_token;
-        console.log("🚀 ~ file: connections.service.ts:113 ~ longLivedToken:", longLivedToken)
         if (!longLivedToken) this.logger.warn('[FB OAuth] Could not retrieve long-lived token; proceeding with short-lived only');
       } catch (e: any) {
         this.logger.warn(`[FB OAuth] Long-lived exchange failed: ${e?.message}`);
@@ -133,17 +132,16 @@ export class ConnectionsService implements OnModuleInit {
       ];
 
       // Retrieve userId from Graph API using short-lived token
-      const accessTokenToUse = longLivedToken || shortLivedToken;
+      const accessTokenToUse = longLivedToken
       this.logger.debug(`[FB OAuth] Getting user info with token: ${accessTokenToUse?.substring(0, 10)}...`);
-      
+
       let userId: string;
       try {
         const meResp = await axios.get(`https://graph.facebook.com/${metaGraphVersion}/me`, {
           params: { fields: 'id,name', access_token: accessTokenToUse },
         });
-        this.logger.debug(`[FB OAuth] User info response: ${JSON.stringify(meResp.data)}`);
-        
-        userId = meResp?.data?.id;
+       
+        userId = meResp?.data.id;
         if (!userId) {
           throw new HttpException('Failed to resolve userId from token', HttpStatus.BAD_REQUEST);
         }
@@ -167,6 +165,7 @@ export class ConnectionsService implements OnModuleInit {
         verifyToken: connection.verifyToken,
       };
       this.logger.debug(`[FB OAuth] Publishing facebook.connection.register: ${JSON.stringify({ ...payload, token: '***' })}`);
+      console.log("🚀 ~ file: connections.service.ts:172 ~ payload:", payload)
       await this.bus.registerFacebookConnection(payload);
 
       return { success: true, connectionId, companyId, status: ConnectionStatus.CODE_RECEIVED };
@@ -264,6 +263,8 @@ export class ConnectionsService implements OnModuleInit {
       state: state,
       scope: "pages_show_list,pages_manage_metadata,pages_read_engagement,pages_manage_posts,pages_messaging",
       response_type: "code",
+      auth_type: "rerequest",
+      prompt: "consent",
     });
 
     return `${baseUrl}?${params.toString()}`;
@@ -291,16 +292,16 @@ export class ConnectionsService implements OnModuleInit {
 
   async initWhatsAppConnection(dto: any): Promise<any> {
     const { companyId } = dto;
-    
+
     // Generate unique connection ID
     const connectionId = `conn_${companyId}_${Date.now()}`;
-    
+
     // Create state data and sign it
     const stateData: StateData = { connectionId, companyId };
     const encodedData = Buffer.from(JSON.stringify(stateData)).toString('base64');
     const signature = signPayload(JSON.stringify(stateData), this.getStateSecret());
     const state = `${encodedData}.${signature}`;
-    
+
     // Get redirect URI from config
     const redirectUri = this.config.get<string>("FACEBOOK_REDIRECT_URI");
     if (!redirectUri) {
@@ -340,14 +341,14 @@ export class ConnectionsService implements OnModuleInit {
       if (!encodedData || !signature) {
         throw new Error('Invalid state format');
       }
-      
+
       const decodedData = Buffer.from(encodedData, 'base64').toString('utf8');
-      
+
       // Verify signature
       if (!verifySignature(decodedData, signature, this.getStateSecret())) {
         throw new Error('Invalid state signature');
       }
-      
+
       const stateData: StateData = JSON.parse(decodedData);
       const { connectionId, companyId } = stateData;
 
@@ -372,7 +373,7 @@ export class ConnectionsService implements OnModuleInit {
       // Create webhook configuration for the connection
       const apiUrl = this.config.get<string>("CORE_PUBLIC_BASE_URL");
       const apiKey = connection.verifyToken; // Using verifyToken as API key for webhook authentication
-      
+
       const webhooks = [
         {
           type: 'httpRequest',
@@ -729,7 +730,7 @@ export class ConnectionsService implements OnModuleInit {
       }
 
       const phoneNumber = phoneNumbersResponse.data.data[0];
-      
+
       return {
         shortLivedToken: longLivedToken, // Return long-lived token
         phoneNumberId: phoneNumber.id,
@@ -759,7 +760,7 @@ export class ConnectionsService implements OnModuleInit {
   handleConnectionCreated(data: any) {
     try {
       const { connectionId, companyId, phoneNumberId, displayName } = data;
-      
+
       this.connModel.findOne({
         connectionId,
         companyId,
@@ -773,7 +774,7 @@ export class ConnectionsService implements OnModuleInit {
             connection.phoneNumberId = phoneNumberId;
           }
           connection.save();
-          
+
           this.logger.log(`Connection ${connectionId} activated successfully`);
         }
       });
@@ -785,7 +786,7 @@ export class ConnectionsService implements OnModuleInit {
   handleConnectionFailed(data: any) {
     try {
       const { connectionId, companyId, error } = data;
-      
+
       this.connModel.findOne({
         connectionId,
         companyId,
@@ -793,7 +794,7 @@ export class ConnectionsService implements OnModuleInit {
         if (connection) {
           connection.status = ConnectionStatus.ERROR_CHANNEL;
           connection.save();
-          
+
           this.logger.error(`Connection ${connectionId} failed: ${error}`);
         }
       });
@@ -811,9 +812,9 @@ export class ConnectionsService implements OnModuleInit {
   }
 
   async findByPhoneNumberId(phoneNumberId: string): Promise<Connection | null> {
-    return this.connModel.findOne({ 
-      phoneNumberId, 
-      status: ConnectionStatus.ACTIVE 
+    return this.connModel.findOne({
+      phoneNumberId,
+      status: ConnectionStatus.ACTIVE
     }).exec();
   }
 
@@ -824,34 +825,34 @@ export class ConnectionsService implements OnModuleInit {
     phoneNumberId?: string;
   }): Promise<Connection | null> {
     const { companyId, connectionId, connectionRefId, phoneNumberId } = params;
-    
+
     // Try to find by connectionId first (most direct)
     if (connectionId) {
-      const conn = await this.connModel.findOne({ 
-        connectionId, 
-        status: ConnectionStatus.ACTIVE 
+      const conn = await this.connModel.findOne({
+        connectionId,
+        status: ConnectionStatus.ACTIVE
       }).exec();
       if (conn) return conn;
     }
-    
+
     // Try to find by phoneNumberId
     if (phoneNumberId) {
-      const conn = await this.connModel.findOne({ 
-        phoneNumberId, 
-        status: ConnectionStatus.ACTIVE 
+      const conn = await this.connModel.findOne({
+        phoneNumberId,
+        status: ConnectionStatus.ACTIVE
       }).exec();
       if (conn) return conn;
     }
-    
+
     // Try to find by companyId (less specific)
     if (companyId) {
-      const conn = await this.connModel.findOne({ 
-        companyId, 
-        status: ConnectionStatus.ACTIVE 
+      const conn = await this.connModel.findOne({
+        companyId,
+        status: ConnectionStatus.ACTIVE
       }).exec();
       if (conn) return conn;
     }
-    
+
     return null;
   }
 }

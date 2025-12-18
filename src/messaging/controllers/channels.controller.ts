@@ -3,8 +3,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { ChannelEventDto } from '../dtos/channel-event.dto';
 import { ChannelIngestionService } from '../services/channel-ingestion.service';
 
-@ApiTags('channels')
-@Controller('v1/channels')
+  @ApiTags('channels')
+@Controller('channels')
 export class ChannelsController {
   private readonly logger = new Logger(ChannelsController.name);
 

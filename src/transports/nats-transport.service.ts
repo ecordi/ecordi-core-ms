@@ -50,11 +50,11 @@ export class NatsTransportService {
 
   // Facebook: Register connection (exchange tokens and subscribe app)
   async registerFacebookConnection<T = any>(payload: any): Promise<T> {
-    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ payload:", payload
+    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ payload:", JSON.stringify(payload)
 
     )
     const result = await this.send<T>('facebook.connection.register', payload);
-    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ result:", result)
+    console.log("🚀 ~ file: nats-transport.service.ts:53 ~ registerFacebookConnection ~ result:", JSON.stringify(result))
     return result;
   }
 
